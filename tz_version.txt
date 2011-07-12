@@ -1,0 +1,2 @@
+Downloaded with:
+ svn co http://svn.webkit.org/repository/webkit/releases/WebKitGTK/webkit-1.4.2/Source/JavaScriptCore javascriptcore-webkitgtk-1.4.2
