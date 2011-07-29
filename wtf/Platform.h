@@ -690,7 +690,7 @@
 #endif
 
 #if PLATFORM(WIN) && !OS(WINCE)
-#define WTF_USE_CF 1
+#define WTF_USE_CF 0
 #define WTF_USE_PTHREADS 0
 #endif
 
