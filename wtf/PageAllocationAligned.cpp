@@ -28,6 +28,25 @@
 
 namespace WTF {
 
+#if OS(WINDOWS)
+inline size_t allocationSize()
+{
+    static size_t size = 0;
+    if (size == 0)
+    {
+        SYSTEM_INFO system_info;
+        GetSystemInfo(&system_info);
+        size = system_info.dwAllocationGranularity;
+    }
+    return size;
+}
+#else
+inline size_t allocationSize()
+{
+    return pageSize();
+}
+#endif
+
 PageAllocationAligned PageAllocationAligned::allocate(size_t size, size_t alignment, OSAllocator::Usage usage, bool writable, bool executable)
 {
     ASSERT(isPageAligned(size));
@@ -50,16 +69,22 @@ PageAllocationAligned PageAllocationAligned::allocate(size_t size, size_t alignm
     vm_map(current_task(), &address, size, alignmentMask, flags, MEMORY_OBJECT_NULL, 0, FALSE, protection, PROT_READ | PROT_WRITE | PROT_EXEC, VM_INHERIT_DEFAULT);
     return PageAllocationAligned(reinterpret_cast<void*>(address), size);
 #else
-    size_t alignmentDelta = alignment - pageSize();
 
     // Resererve with suffcient additional VM to correctly align.
+#ifdef OS(WINDOWS)
+    size_t alignmentDelta = alignment <= allocationSize() && size <= allocationSize() ? 0 : alignment - allocationSize();
+#else
+    size_t alignmentDelta = alignment - pageSize();
+#endif
     size_t reservationSize = size + alignmentDelta;
+
     void* reservationBase = OSAllocator::reserveUncommitted(reservationSize, usage, writable, executable);
 
     // Select an aligned region within the reservation and commit.
     void* alignedBase = reinterpret_cast<uintptr_t>(reservationBase) & alignmentMask
         ? reinterpret_cast<void*>((reinterpret_cast<uintptr_t>(reservationBase) & ~alignmentMask) + alignment)
-        : reservationBase;
+            : reservationBase;
+
     OSAllocator::commit(alignedBase, size, writable, executable);
 
     return PageAllocationAligned(alignedBase, size, reservationBase, reservationSize);

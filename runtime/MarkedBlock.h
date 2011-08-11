@@ -77,7 +77,11 @@ namespace JSC {
         template <typename Functor> void forEach(Functor&);
 
     private:
+#if OS(WINDOWS)
+        static const size_t blockSize = 64 * KB;
+#else
         static const size_t blockSize = 16 * KB;
+#endif
         static const size_t blockMask = ~(blockSize - 1); // blockSize must be a power of two.
 
         static const size_t atomMask = ~(atomSize - 1); // atomSize must be a power of two.
