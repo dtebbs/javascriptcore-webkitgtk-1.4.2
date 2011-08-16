@@ -364,31 +364,46 @@ void Heap::collectAllGarbage()
 
 void Heap::reset(SweepToggle sweepToggle)
 {
+    //printf("reset\n"); fflush(stdout);
+
     ASSERT(globalData()->identifierTable == wtfThreadData().currentIdentifierTable());
     JAVASCRIPTCORE_GC_BEGIN();
 
+    //CFAbsoluteTime startTime = CFAbsoluteTimeGetCurrent();
+
     markRoots();
+
+    //CFAbsoluteTime markTime = CFAbsoluteTimeGetCurrent() - startTime;
 
     JAVASCRIPTCORE_GC_MARKED();
 
     m_markedSpace.reset();
     m_extraCost = 0;
 
+    //CFAbsoluteTime resetTime = CFAbsoluteTimeGetCurrent() - startTime;
+
 #if ENABLE(JSC_ZOMBIES)
     sweepToggle = DoSweep;
 #endif
 
     if (sweepToggle == DoSweep) {
+        //printf("DoSweep\n");
         m_markedSpace.sweep();
         m_markedSpace.shrink();
     }
 
     size_t proportionalBytes = static_cast<size_t>(1.5 * m_markedSpace.size());
-    m_markedSpace.setHighWaterMark(max(proportionalBytes, minBytesPerCycle));
+    size_t highWaterMark = max(proportionalBytes, minBytesPerCycle);
+    m_markedSpace.setHighWaterMark(highWaterMark);
 
     JAVASCRIPTCORE_GC_END();
 
     (*m_activityCallback)();
+
+    //CFAbsoluteTime activityTime = CFAbsoluteTimeGetCurrent() - startTime;
+
+    // printf("markTime = %gs, resetTime = %gs, activityTime = %gs\n",
+    //        markTime, resetTime, activityTime);
 }
 
 void Heap::setActivityCallback(PassOwnPtr<GCActivityCallback> activityCallback)
