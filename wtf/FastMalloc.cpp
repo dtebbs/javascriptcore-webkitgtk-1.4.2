@@ -1364,6 +1364,7 @@ class TCMalloc_PageHeap {
 
   // Release all pages on the free list for reuse by the OS:
   void ReleaseFreePages();
+  void ReleaseFreeList(Span*, Span*);
 
   // Return 0 if we have no information, or else the correct sizeclass for p.
   // Reads and writes to pagemap_cache_ do not require locking.
@@ -2142,16 +2143,31 @@ bool TCMalloc_PageHeap::CheckList(Span* list, Length min_pages, Length max_pages
 }
 #endif
 
-static void ReleaseFreeList(Span* list, Span* returned) {
+void TCMalloc_PageHeap::ReleaseFreeList(Span* list, Span* returned) {
   // Walk backwards through list so that when we push these
   // spans on the "returned" list, we preserve the order.
+#if USE_BACKGROUND_THREAD_TO_SCAVENGE_MEMORY
+  size_t freePageReduction = 0;
+#endif
+
   while (!DLL_IsEmpty(list)) {
     Span* s = list->prev;
+
     DLL_Remove(s);
+    s->decommitted = true;
     DLL_Prepend(returned, s);
     TCMalloc_SystemRelease(reinterpret_cast<void*>(s->start << kPageShift),
                            static_cast<size_t>(s->length << kPageShift));
+#if USE_BACKGROUND_THREAD_TO_SCAVENGE_MEMORY
+    freePageReduction += s->length;
+#endif
   }
+
+#if USE_BACKGROUND_THREAD_TO_SCAVENGE_MEMORY
+    free_committed_pages_ -= freePageReduction;
+    if (free_committed_pages_ < min_free_committed_pages_since_last_scavenge_) 
+        min_free_committed_pages_since_last_scavenge_ = free_committed_pages_;
+#endif
 }
 
 void TCMalloc_PageHeap::ReleaseFreePages() {
