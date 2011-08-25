@@ -229,9 +229,18 @@ LiteralParser::TokenType LiteralParser::Lexer::lexNumber(LiteralParserToken& tok
     //
     // -?(0 | [1-9][0-9]*) ('.' [0-9]+)? ([eE][+-]? [0-9]+)?
 
+    const int cMaxUsableDigitsOf32BitValue = 9; // This is the max number of digits that can be fully represented by a 32bit value
+    bool useFastPath = true;
+    double sign = 1.0;
+
     if (m_ptr < m_end && *m_ptr == '-') // -?
+    {
+        sign = -1.0;
         ++m_ptr;
-    
+    }
+
+    const UChar *integerStart = m_ptr;
+
     // (0 | [1-9][0-9]*)
     if (m_ptr < m_end && *m_ptr == '0') // 0
         ++m_ptr;
@@ -243,9 +252,17 @@ LiteralParser::TokenType LiteralParser::Lexer::lexNumber(LiteralParserToken& tok
     } else
         return TokError;
 
+    const UChar *integerEnd = m_ptr;
+
+    const UChar *factionalStart = 0;
+    const UChar *factionalEnd = 0;
+
     // ('.' [0-9]+)?
     if (m_ptr < m_end && *m_ptr == '.') {
         ++m_ptr;
+
+        factionalStart = m_ptr;
+
         // [0-9]+
         if (m_ptr >= m_end || !isASCIIDigit(*m_ptr))
             return TokError;
@@ -253,10 +270,13 @@ LiteralParser::TokenType LiteralParser::Lexer::lexNumber(LiteralParserToken& tok
         ++m_ptr;
         while (m_ptr < m_end && isASCIIDigit(*m_ptr))
             ++m_ptr;
+
+        factionalEnd = m_ptr;
     }
 
     //  ([eE][+-]? [0-9]+)?
     if (m_ptr < m_end && (*m_ptr == 'e' || *m_ptr == 'E')) { // [eE]
+        useFastPath = false;
         ++m_ptr;
 
         // [-+]?
@@ -274,16 +294,69 @@ LiteralParser::TokenType LiteralParser::Lexer::lexNumber(LiteralParserToken& tok
     
     token.type = TokNumber;
     token.end = m_ptr;
-    Vector<char, 64> buffer(token.end - token.start + 1);
-    int i;
-    for (i = 0; i < token.end - token.start; i++) {
-        ASSERT(static_cast<char>(token.start[i]) == token.start[i]);
-        buffer[i] = static_cast<char>(token.start[i]);
+
+    if (useFastPath)
+    {
+        useFastPath = (integerEnd - integerStart) + (factionalEnd - factionalStart) <= cMaxUsableDigitsOf32BitValue;
     }
-    buffer[i] = 0;
-    char* end;
-    token.numberToken = WTF::strtod(buffer.data(), &end);
-    ASSERT(buffer.data() + (token.end - token.start) == end);
+
+    if (useFastPath)
+    {
+        // These are written to give exactly the same results as WTF::strtod
+        if (token.end - token.start == 1)
+        {
+            token.numberToken = token.start[0] - '0';
+        }
+        else
+        {
+            int result = 0;
+
+            while(integerStart < integerEnd)
+            {
+                result *= 10;
+                result += *integerStart - '0';      
+                ++integerStart;
+            }
+
+            if (factionalStart)
+            {
+                int deominator = 1;
+                while(factionalStart < factionalEnd)
+                {
+                    result *= 10;
+                    result += *factionalStart - '0';
+                    deominator *=10;
+                    ++factionalStart;
+                }
+                token.numberToken = double(result) / double (deominator);
+            }
+            else
+            {
+                token.numberToken = result;
+            }
+
+            token.numberToken *= sign;
+        }
+    }
+    else
+    {
+        Vector<char, 64> buffer(token.end - token.start + 1);
+        char *pData = buffer.data();
+        const UChar* pTokenEnd= token.end;
+        const UChar* pToken = token.start;
+        while(pToken != pTokenEnd)
+        {
+            *pData = static_cast<char>(*pToken);
+            ++pData;
+            ++pToken;
+        }
+        *pData = 0;
+
+        char* end;
+        token.numberToken = WTF::strtod(buffer.data(), &end);
+        ASSERT(buffer.data() + (token.end - token.start) == end);
+    }
+
     return TokNumber;
 }
 
