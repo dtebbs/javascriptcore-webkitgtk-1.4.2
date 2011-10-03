@@ -32,7 +32,7 @@
 #include <wtf/Noncopyable.h>
 #include <wtf/Vector.h>
 
-#define ASSERT_CLASS_FITS_IN_CELL(class) COMPILE_ASSERT(sizeof(class) < MarkedSpace::maxCellSize, class_fits_in_cell)
+#define ASSERT_CLASS_FITS_IN_CELL(class) COMPILE_ASSERT(sizeof(class) <= MarkedSpace::maxCellSize, class_fits_in_cell)
 
 namespace JSC {
 
@@ -83,12 +83,12 @@ namespace JSC {
         // [ 8, 16... 128 )
         static const size_t preciseStep = MarkedBlock::atomSize;
         static const size_t preciseCutoff = 128;
-        static const size_t preciseCount = preciseCutoff / preciseStep - 1;
+        static const size_t preciseCount = preciseCutoff / preciseStep;
 
         // [ 128, 256... 1024 )
         static const size_t impreciseStep = preciseCutoff;
         static const size_t impreciseCutoff = maxCellSize;
-        static const size_t impreciseCount = impreciseCutoff / impreciseStep - 1;
+        static const size_t impreciseCount = impreciseCutoff / impreciseStep;
 
         typedef HashSet<MarkedBlock*>::iterator BlockIterator;
 
@@ -109,8 +109,8 @@ namespace JSC {
 
         void clearMarks(MarkedBlock*);
 
-        SizeClass m_preciseSizeClasses[preciseCount];
-        SizeClass m_impreciseSizeClasses[impreciseCount];
+        FixedArray<SizeClass, preciseCount> m_preciseSizeClasses;
+        FixedArray<SizeClass, impreciseCount> m_impreciseSizeClasses;
         HashSet<MarkedBlock*> m_blocks;
         size_t m_waterMark;
         size_t m_highWaterMark;
