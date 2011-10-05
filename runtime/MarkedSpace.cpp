@@ -153,10 +153,10 @@ void MarkedSpace::reset()
     m_waterMark = 0;
 
     for (size_t cellSize = preciseStep; cellSize <= preciseCutoff; cellSize += preciseStep)
-        sizeClassFor(cellSize).cellSize = cellSize;
+        sizeClassFor(cellSize).reset();
 
     for (size_t cellSize = impreciseStep; cellSize <= impreciseCutoff; cellSize += impreciseStep)
-        sizeClassFor(cellSize).cellSize = cellSize;
+        sizeClassFor(cellSize).reset();
 
     BlockIterator end = m_blocks.end();
     for (BlockIterator it = m_blocks.begin(); it != end; ++it)
